@@ -1,0 +1,53 @@
+<!--The content below is only a placeholder and can be replaced.-->
+<div class="container">
+<div>
+  <h1>WebRTC Demo</h1>
+  <input type="text" [(ngModel)]="userName" placeholder="Username" />
+  <div class="buttons">
+    <button (click)="createPeerConnection()">Create peer connection</button>
+    <button (click)="createOffer()">Create offer</button>
+    <button (click)="setOffer()">Set local offer</button>
+    <button (click)="acceptOffer()">Accept remote offer</button>
+    <button (click)="createAnswer()">Create Answer</button>
+    <button (click)="setAnswer()">Set Answer</button>
+  </div>
+</div>
+<div class="videos">
+  <div class="local">
+      <h2>Local</h2>
+      <video #localVideo id="selfie" autoplay controls loop></video>
+      <div>
+        <h3>Stream Source</h3>
+        <select name="streamSource" id="streamSource" [(ngModel)]="streamSource" (ngModelChange)="onStreamSourceChange()" >
+          <option value="media" selected>User Media</option>
+          <option value="video">Video File</option>
+        </select>
+      </div>
+      
+  </div>
+  <div class="remote">
+      <h2>Remote</h2>
+      <video #remoteVideo id="remote" autoplay></video>
+      <div>
+        <button (click)="fetchOffers()">Refresh offers</button>
+        <ul class="offer-list">
+          <li *ngFor="let peer of remotePeers">
+            <label>
+                <input type="radio" name="remotePeer" [(ngModel)]="selectedPeer" [value]="peer" />
+                {{peer.name}}
+            </label>
+            <button class="btn-del" (click)="deleteOffer(offer)">Delete</button>
+          </li>
+        </ul>
+      </div>
+      <div>
+          <h3>Offer Description</h3>
+            <textarea resizable="false">{{selectedPeer?.sdp }}</textarea>
+          </div>
+  </div>
+</div>
+
+
+
+</div>
+<router-outlet></router-outlet>

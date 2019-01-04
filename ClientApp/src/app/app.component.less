@@ -1,0 +1,60 @@
+.container {
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+h1 {
+    color: cornflowerblue;
+}
+
+.buttons {
+    button {
+        margin: 5px;
+    }
+}
+
+.videos {
+    border-top: 1px solid #aaa;
+    margin-top: 20px;
+    display: flex;
+    flex-direction: row;
+    video {
+        height: 225px;
+        width: 100%;
+        background: #222;
+    }
+
+    .local {
+        flex: 1;
+        margin-right: 10px;
+        
+    }
+
+    .remote {
+        flex: 1;
+        margin-left: 10px;
+
+        .offer-list {
+            padding: 0;
+            margin: 20px 10px;
+            list-style: none;
+
+            li {
+                margin: 5px;
+            }
+
+            .btn-del {
+                float: right;
+            }
+        }
+
+        textarea {
+            display: block;
+            width: 100%;
+            height: 200px;
+            resize: none;
+        }
+    }
+}
