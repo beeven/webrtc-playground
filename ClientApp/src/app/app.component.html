@@ -6,10 +6,11 @@
   <div class="buttons">
     <button (click)="createPeerConnection()">Create peer connection</button>
     <button (click)="createOffer()">Create offer</button>
-    <button (click)="setOffer()">Set local offer</button>
-    <button (click)="acceptOffer()">Accept remote offer</button>
+    <button (click)="createDataChannel()">Create data channel</button>
+    <button (click)="acceptOffer()">Accept offer</button>
     <button (click)="createAnswer()">Create Answer</button>
-    <button (click)="setAnswer()">Set Answer</button>
+    <button (click)="acceptAnswer()">Accept Answer</button>
+    <button (click)="hangUp()">Hang up</button>
   </div>
 </div>
 <div class="videos">
@@ -18,9 +19,8 @@
       <video #localVideo id="selfie" autoplay controls loop></video>
       <div>
         <h3>Stream Source</h3>
-        <select name="streamSource" id="streamSource" [(ngModel)]="streamSource" (ngModelChange)="onStreamSourceChange()" >
-          <option value="media" selected>User Media</option>
-          <option value="video">Video File</option>
+        <select name="streamSource" id="streamSource" [(ngModel)]="streamSource" (ngModelChange)="getMedia()" >
+          <option *ngFor="let dev of mediaDevices" [value]="dev.deviceId" selected>{{dev.label}}</option>
         </select>
       </div>
       
@@ -29,20 +29,20 @@
       <h2>Remote</h2>
       <video #remoteVideo id="remote" autoplay></video>
       <div>
-        <button (click)="fetchOffers()">Refresh offers</button>
+        <button (click)="fetchPeers()">Refresh peers</button>
         <ul class="offer-list">
           <li *ngFor="let peer of remotePeers">
             <label>
-                <input type="radio" name="remotePeer" [(ngModel)]="selectedPeer" [value]="peer" />
+                <input type="radio" name="remotePeer" [(ngModel)]="selectedRemotePeer" [value]="peer" />
                 {{peer.name}}
             </label>
-            <button class="btn-del" (click)="deleteOffer(offer)">Delete</button>
+            <button class="btn-del" (click)="deletePeer(peer)">delete</button>
           </li>
         </ul>
       </div>
       <div>
-          <h3>Offer Description</h3>
-            <textarea resizable="false">{{selectedPeer?.sdp }}</textarea>
+          <h3>Rmote peer session description</h3>
+            <textarea resizable="false">{{selectedRemotePeer?.sdp }}</textarea>
           </div>
   </div>
 </div>

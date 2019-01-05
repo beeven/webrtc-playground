@@ -2,11 +2,11 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 
-export class PeerDescription
+export class PeerSessionDescription
 {
     id: number;
     name: string;
-    type: string;
+    type: RTCSdpType;
     sdp: string;
 }
 
@@ -25,8 +25,8 @@ export class PeerService {
 
     constructor(private http: HttpClient) { }
 
-    addPeer(name: string, type: string, sdp: string): Observable<PeerDescription> {
-        return this.http.post<PeerDescription>(`${PeerServiceBaseUrl}`,{id: 0, name: name, type: type, sdp: sdp});
+    addPeer(name: string, type: string, sdp: string): Observable<PeerSessionDescription> {
+        return this.http.post<PeerSessionDescription>(`${PeerServiceBaseUrl}`,{id: 0, name: name, type: type, sdp: sdp});
     }
 
     deletePeer(id: number): Observable<number> {
@@ -37,15 +37,10 @@ export class PeerService {
         return this.http.delete<number>(`${PeerServiceBaseUrl}/all/${name}`);
     }
 
-    listPeer(): Observable<PeerDescription[]> {
-        return this.http.get<PeerDescription[]>(`${PeerServiceBaseUrl}`);
+    listPeer(): Observable<PeerSessionDescription[]> {
+        return this.http.get<PeerSessionDescription[]>(`${PeerServiceBaseUrl}`);
     }
 
-}
-
-@Injectable()
-export class CandidateService {
-    constructor(private http: HttpClient){ }
     addCandidate(peerId: number, candidateJson: string): Observable<PeerCandidate> {
         return this.http.post<PeerCandidate>(`${CandidateServiceBaseUrl}/${peerId}`, {id: 0, candidateJson: candidateJson});
     }
@@ -53,4 +48,5 @@ export class CandidateService {
     getCandidates(peerId: number): Observable<PeerCandidate[]> {
         return this.http.get<PeerCandidate[]>(`${CandidateServiceBaseUrl}/${peerId}`);
     }
+
 }

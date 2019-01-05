@@ -1,5 +1,5 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, Pipe, PipeTransform } from '@angular/core';
-import { PeerService, CandidateService, PeerDescription } from './peer.service';
+import { PeerService, PeerSessionDescription } from './peer.service';
 import { tap, switchMap } from 'rxjs/operators';
 import { from } from 'rxjs';
 
@@ -16,26 +16,23 @@ export class AppComponent implements AfterViewInit {
 
   constraints: MediaStreamConstraints = {video: true};
 
-  streamSource: string = "media";
+  mediaDevices: MediaDeviceInfo[];
+
+  streamSource: string;
   localStream: MediaStream;
 
-  localPeerConnection: RTCPeerConnection;
-  remotePeerConnection: RTCPeerConnection;
+  peerConnection: RTCPeerConnection;
 
   rtcConfig: RTCConfiguration = {};
   //stun:stun.ideasip.com
 
-  localDataChannel: RTCDataChannel;
-  remoteDataChannel: RTCDataChannel;
-  iceCandicate: RTCIceCandidate;
-  
-
-  offerDescription: RTCSessionDescriptionInit;
+  dataChannel: RTCDataChannel;
 
   userName: string = "User1";
 
-  remotePeers: PeerDescription[];
-  selectedPeer: PeerDescription;
+  localPeer: PeerSessionDescription;
+  remotePeers: PeerSessionDescription[];
+  selectedRemotePeer: PeerSessionDescription;
 
   candidates: RTCIceCandidate[] = [];
 
@@ -47,25 +44,38 @@ export class AppComponent implements AfterViewInit {
   ) {}
 
   ngAfterViewInit(): void {
-    this.getMedia();
+    from(navigator.mediaDevices.enumerateDevices())
+      .pipe(
+        tap((devices) => {
+          this.mediaDevices = [];
+          for(let dev of devices) {
+            if(dev.kind == 'videoinput') {
+              this.mediaDevices.push(dev);
+            }
+          }
+          this.mediaDevices.push({kind: 'videoinput', label: 'Video File', deviceId: 'file', groupId: null});
+        }),
+        tap(()=>{ 
+          this.streamSource = this.mediaDevices[0].deviceId;
+          this.getMedia();
+        })
+      ).subscribe();
   }
 
-  onStreamSourceChange() {
-
-    if(this.streamSource == 'media') {
-      this.getMedia();
-    } else {
-      this.localVideo.nativeElement.srcObject = null;
+  playVideoFile() {
+    this.localVideo.nativeElement.srcObject = null;
       if(this.localStream != null) {
         this.localStream.getTracks().forEach(track => track.stop());
       }
       this.localVideo.nativeElement.src = "assets/SwingOutSisters.mp4";
       this.localStream = this.localVideo.nativeElement.captureStream();
-    }
   }
 
   getMedia() {
-    navigator.mediaDevices.getUserMedia(this.constraints)
+    if(this.streamSource == 'file') {
+      this.playVideoFile();
+    } else {
+      navigator.mediaDevices.getUserMedia({audio: true, video: {deviceId: this.streamSource ? {exact: this.streamSource}:undefined}})
       .then( 
       (stream)=>{
         this.localStream = stream;
@@ -76,120 +86,134 @@ export class AppComponent implements AfterViewInit {
       (err)=>{
         console.error("navigator.getUserMedia error: ", err);
       });
-  }
-
-  createPeerConnection() {
-    if(this.localPeerConnection != null) {
-      this.localPeerConnection.close();
-      this.remotePeerConnection.close();
-    }
-
-
-    this.localPeerConnection = new RTCPeerConnection(this.rtcConfig);
-    this.localPeerConnection.onicecandidate = (ev: RTCPeerConnectionIceEvent)=>{
-      this.onIceCandidate("local", ev.candidate);
-      if(ev.candidate != null){
-        this.candidates.push(ev.candidate);
-      }
     }
     
-    this.localDataChannel = this.localPeerConnection.createDataChannel('sendDataChannel', { ordered: true});
-    this.localDataChannel.onopen = (ev)=>{
-      console.log("data channel opened.");
-    }
-    this.localDataChannel.onclose = (ev)=>{
-      console.log("data channel closed.");
-    }
-    this.localDataChannel.onerror = (ev)=> {
-      console.log("data channel errored.");
+  }
+
+  // PC1 PC2
+  createPeerConnection() {
+    if(this.peerConnection != null) {
+      this.peerConnection.close();
     }
 
 
-    this.remotePeerConnection = new RTCPeerConnection(this.rtcConfig);
-    this.remotePeerConnection.onicecandidate = (ev)=>{
-      this.onIceCandidate("remote", ev.candidate);
+    this.peerConnection = new RTCPeerConnection(this.rtcConfig);
+    this.peerConnection.onicecandidate = (ev: RTCPeerConnectionIceEvent)=>{
+      console.log("on icecandiate");
+      if(ev.candidate != null){
+        this.candidates.push(ev.candidate);
+        this.peerService.addCandidate(this.localPeer.id, JSON.stringify(ev.candidate.toJSON())).subscribe();
+      }
     }
-    this.remotePeerConnection.ontrack = (ev)=>{
-      console.log("remote on track");
+
+    this.peerConnection.ondatachannel = (ev)=>{
+      console.log("receive data channel");
+      if(this.dataChannel == null) {
+        this.dataChannel = ev.channel;
+      }
+    }
+
+    this.peerConnection.ontrack = (ev)=> {
       this.remoteVideo.nativeElement.srcObject = ev.streams[0];
     }
-    this.remotePeerConnection.ondatachannel = (ev)=>{
-      console.log("Receive data channel from remote.");
-      this.remoteDataChannel = ev.channel
-      this.remoteDataChannel.onopen = (e) => { console.log("remote data channel opened.")};
-      this.remoteDataChannel.onmessage = (e) => { console.log("remote data channel received: ", e.data)};
-      this.remoteDataChannel.onclose = (e) => {console.log("remote data channel closed.")};
-    }
-
 
     this.localStream.getTracks().forEach(track => {
-      this.localPeerConnection.addTrack(track);
+      this.peerConnection.addTrack(track);
     });
 
     console.log("Peer connection created.");
 
   }
 
-  onIceCandidate(name: string, candidate:RTCIceCandidate ) {
-    console.log("OnIceCandidate:",name, candidate);
+  createDataChannel() {
+    this.dataChannel = this.peerConnection.createDataChannel('sendDataChannel', { ordered: true});
+    this.dataChannel.onopen = (ev)=>{
+      console.log("data channel opened.");
+    }
+    this.dataChannel.onclose = (ev)=>{
+      console.log("data channel closed.");
+    }
+    this.dataChannel.onerror = (ev)=> {
+      console.log("data channel errored.");
+    }
   }
 
+  // PC1
   createOffer() {
-    from(this.localPeerConnection.createOffer({offerToReceiveVideo: true, offerToReceiveAudio: true}))
+    from(this.peerConnection.createOffer({offerToReceiveVideo: true, offerToReceiveAudio: true}))
       .pipe(
-        tap((desc)=>{
-          this.offerService.saveOffer(desc.sdp, this.userName)
-        }),
-        switchMap((desc)=>this.localPeerConnection.setLocalDescription(desc)),
+        switchMap((desc: RTCSessionDescriptionInit)=>this.peerService.addPeer(this.userName, desc.type, desc.sdp)),
+        tap((peer) => { this.localPeer = peer; }),
+
+        // will yield local icecandidate
+        switchMap((peer)=>this.peerConnection.setLocalDescription({type:'offer', sdp: peer.sdp})),
       ).subscribe();
   }
 
-  fetchOffers() {
-    this.offerService.listOffer().subscribe(
-      (offers) => {
-        this.remoteOffers = offers;
+  fetchPeers() {
+    this.peerService.listPeer().subscribe(
+      (peers) => {
+        this.remotePeers = peers;
       }
     )
   }
 
-  deleteOffer(offer: Offer) {
-    this.offerService.removeOffer(offer.id).subscribe(
+  deletePeer(peer: PeerSessionDescription) {
+    this.peerService.deletePeer(peer.id).subscribe(
       ()=> {
-        let index = this.remoteOffers.indexOf(offer);
-        this.remoteOffers.splice(index,1);
+        let index = this.remotePeers.indexOf(peer);
+        this.remotePeers.splice(index,1);
       }
     );
   }
 
+  // PC2
   acceptOffer() {
-    from(this.remotePeerConnection.setRemoteDescription({ type: 'offer', sdp: this.selectedOffer.offerJson}))
+    from(this.peerConnection.setRemoteDescription({ type: this.selectedRemotePeer.type, sdp: this.selectedRemotePeer.sdp}))
       .pipe(
-        switchMap(()=>{
-          this.
-        })
-      )
-    this.candidates.forEach(candidate => this.remotePeerConnection.addIceCandidate(candidate));
+        switchMap(()=>this.peerService.getCandidates(this.selectedRemotePeer.id)),
+        tap((candidates)=> { candidates.forEach(c => this.peerConnection.addIceCandidate(
+          JSON.parse(c.candidateJson)))})
+      ).subscribe();
   }
 
+  // PC2
   createAnswer() {
-    this.remotePeerConnection.createAnswer().then(
-      (answer) => {
-        this.remotePeerConnection.setLocalDescription(answer);
-        this.localPeerConnection.setRemoteDescription(answer);
-      }
-    )
+    from(this.peerConnection.createAnswer({offerToReceiveVideo: true}))
+    .pipe(
+      switchMap((answer)=>this.peerService.addPeer(this.userName, answer.type, answer.sdp)),
+      tap( (peer)=>{
+        this.localPeer = peer;
+      }),
+      tap( (peer)=> {
+        this.peerConnection.setLocalDescription({type: peer.type, sdp: peer.sdp});
+      })     
+    ).subscribe();
+  }
+
+  // PC1
+  acceptAnswer() {
+    from(this.peerConnection.setRemoteDescription({type: this.selectedRemotePeer.type, sdp: this.selectedRemotePeer.sdp}))
+      .pipe(
+        switchMap(()=>this.peerService.getCandidates(this.selectedRemotePeer.id)),
+        tap( (candidates)=> 
+          candidates.forEach(c=>
+          this.peerConnection.addIceCandidate(JSON.parse(c.candidateJson)))
+        )
+      ).subscribe();
+
   }
 
   hangUp() {
-    this.remoteVideo.nativeElement.srcObject = null;
-    this.localDataChannel.close();
-    if(this.remoteDataChannel) {
-      this.remoteDataChannel.close();
+    if(this.dataChannel) {
+      this.dataChannel.close();
+      this.dataChannel = null;
     }
-    this.localPeerConnection.close();
-    this.remotePeerConnection.close();
-    this.localPeerConnection = null;
-    this.remotePeerConnection = null;
+    if(this.peerConnection){
+      this.peerConnection.close();
+      this.peerConnection = null;
+    }
+    this.getMedia();
   }
 
 

@@ -56,12 +56,12 @@ namespace webrtc.Controllers
         [HttpPost("candidate/{peerId}")]
         public async Task<IActionResult> AddCandidate(int peerId, [FromBody]IceCandidate candidate)
         {
-            var peer = await _rtcContext.Peers.SingleOrDefaultAsync(p => p.Id == peerId);
-            if(peer == null) {
-                return NotFound();
-            }
-            candidate.PeerId = peer.Id;
-            candidate.Peer = peer;
+            // var peer = await _rtcContext.Peers.SingleOrDefaultAsync(p => p.Id == peerId);
+            // if(peer == null) {
+            //     return NotFound();
+            // }
+            candidate.PeerId = peerId;
+            //candidate.Peer = peer;
             await _rtcContext.IceCandidates.AddAsync(candidate);
             await _rtcContext.SaveChangesAsync();
             return Ok(candidate);
