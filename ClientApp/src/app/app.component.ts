@@ -4,6 +4,22 @@ import { tap, switchMap } from 'rxjs/operators';
 import { from } from 'rxjs';
 
 
+class VideoDeviceInfo implements MediaDeviceInfo {
+
+  constructor(
+    public kind: MediaDeviceKind, public label: string,
+    public deviceId: string, public groupId: string
+      ) {
+    }
+  toJSON() {
+    return {
+      kind: this.kind,
+      label: this.label,
+      deviceId: this.deviceId,
+      groupId: this.groupId
+    }
+  }
+}
 
 @Component({
   selector: 'app-root',
@@ -23,7 +39,9 @@ export class AppComponent implements AfterViewInit {
 
   peerConnection: RTCPeerConnection;
 
-  rtcConfig: RTCConfiguration = {};
+  rtcConfig: RTCConfiguration = {
+    iceServers: [{urls: "stun:stun.ideasip.com"}]
+  };
   //stun:stun.ideasip.com
 
   dataChannel: RTCDataChannel;
@@ -53,7 +71,8 @@ export class AppComponent implements AfterViewInit {
               this.mediaDevices.push(dev);
             }
           }
-          this.mediaDevices.push({kind: 'videoinput', label: 'Video File', deviceId: 'file', groupId: null});
+
+          this.mediaDevices.push( new VideoDeviceInfo('videoinput', 'Video File', 'file', null));
         }),
         tap(()=>{ 
           this.streamSource = this.mediaDevices[0].deviceId;
@@ -67,7 +86,7 @@ export class AppComponent implements AfterViewInit {
       if(this.localStream != null) {
         this.localStream.getTracks().forEach(track => track.stop());
       }
-      this.localVideo.nativeElement.src = "assets/SwingOutSisters.mp4";
+      this.localVideo.nativeElement.src = "assets/Tegami.mp4";
       this.localStream = this.localVideo.nativeElement.captureStream();
   }
 
@@ -106,6 +125,10 @@ export class AppComponent implements AfterViewInit {
       }
     }
 
+    this.peerConnection.onicecandidateerror = (ev)=>{
+      console.log(`IceCandidateError: ${ev.errorText}`);
+    }
+
     this.peerConnection.ondatachannel = (ev)=>{
       console.log("receive data channel");
       if(this.dataChannel == null) {
@@ -114,11 +137,13 @@ export class AppComponent implements AfterViewInit {
     }
 
     this.peerConnection.ontrack = (ev)=> {
+      console.log(ev);
       this.remoteVideo.nativeElement.srcObject = ev.streams[0];
     }
 
     this.localStream.getTracks().forEach(track => {
-      this.peerConnection.addTrack(track);
+      console.log(`local track: ${track}`);
+      this.peerConnection.addTrack(track, this.localStream);
     });
 
     console.log("Peer connection created.");
@@ -144,7 +169,6 @@ export class AppComponent implements AfterViewInit {
       .pipe(
         switchMap((desc: RTCSessionDescriptionInit)=>this.peerService.addPeer(this.userName, desc.type, desc.sdp)),
         tap((peer) => { this.localPeer = peer; }),
-
         // will yield local icecandidate
         switchMap((peer)=>this.peerConnection.setLocalDescription({type:'offer', sdp: peer.sdp})),
       ).subscribe();
@@ -193,10 +217,12 @@ export class AppComponent implements AfterViewInit {
 
   // PC1
   acceptAnswer() {
+    
     from(this.peerConnection.setRemoteDescription({type: this.selectedRemotePeer.type, sdp: this.selectedRemotePeer.sdp}))
       .pipe(
         switchMap(()=>this.peerService.getCandidates(this.selectedRemotePeer.id)),
         tap( (candidates)=> 
+          
           candidates.forEach(c=>
           this.peerConnection.addIceCandidate(JSON.parse(c.candidateJson)))
         )
